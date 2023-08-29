@@ -5,6 +5,49 @@ import { Ref } from 'vue'
 
 import type { NFTWithMetadata } from '@/composables/useNft'
 
+interface FetchSearchParams {
+  page?: number
+  loadDirection?: 'up' | 'down'
+  search?: { [key: string]: string | number }[]
+}
+
+const getQueryPath = (prefix: string) => {
+  switch (prefix) {
+    case 'rmrk':
+      return 'chain-rmrk'
+    case 'ksm':
+      return 'chain-ksm'
+    default:
+      return prefix
+  }
+}
+
+const getVariables = (search) => {
+  const { searchParams } = useSearchParams()
+  const route = useRoute()
+
+  return search?.length
+    ? { search }
+    : {
+        search: searchParams.value,
+        priceMin: Number(route.query.min),
+        priceMax: Number(route.query.max),
+      }
+}
+
+const getOrdering = () => {
+  const route = useRoute()
+
+  return route.query.sort?.length ? route.query.sort : ['blockNumber_DESC']
+}
+
+const getNewNfts = (loadDirection, oldNfts, nFTEntities) => {
+  if (loadDirection === 'up') {
+    return nFTEntities.concat(oldNfts)
+  }
+  return oldNfts.value.concat(nFTEntities)
+}
+
 export function useFetchSearch({
   first,
   total,
@@ -25,14 +68,6 @@ export function useFetchSearch({
   const nfts = ref<NFTWithMetadata[]>([])
   const loadedPages = ref([] as number[])
 
-  const { searchParams } = useSearchParams()
-
-  interface FetchSearchParams {
-    page?: number
-    loadDirection?: 'up' | 'down'
-    search?: { [key: string]: string | number }[]
-  }
-
   async function fetchSearch({
     page = 1,
     loadDirection = 'down',
@@ -43,38 +78,17 @@ export function useFetchSearch({
     }
     isFetchingData.value = true
 
-    const getQueryPath = (prefix: string) => {
-      switch (prefix) {
-        case 'rmrk':
-          return 'chain-rmrk'
-        case 'ksm':
-          return 'chain-ksm'
-        default:
-          return prefix
-      }
-    }
-
-    const variables = search?.length
-      ? { search }
-      : {
-          search: searchParams.value,
-          priceMin: Number(route.query.min),
-          priceMax: Number(route.query.max),
-        }
-
     const queryPath = getQueryPath(client.value)
     const query = await resolveQueryPath(queryPath, 'nftListWithSearch')
     const result = await $apollo.query({
       query: query.default,
       client: client.value,
       variables: {
-        ...variables,
+        ...getVariables(search),
         first: first.value,
         offset: (page - 1) * first.value,
         denyList: getDenyList(urlPrefix.value),
-        orderBy: route.query.sort?.length
-          ? route.query.sort
-          : ['blockNumber_DESC'],
+        orderBy: getOrdering(),
       },
     })
 
@@ -84,11 +98,7 @@ export function useFetchSearch({
     total.value = nftEntitiesConnection.totalCount
 
     if (!loadedPages.value.includes(page)) {
-      if (loadDirection === 'up') {
-        nfts.value = nFTEntities.concat(nfts.value)
-      } else {
-        nfts.value = nfts.value.concat(nFTEntities)
-      }
+      nfts.value = getNewNfts(loadDirection, nfts.value, nFTEntities)
       loadedPages.value.push(page)
     }
 
