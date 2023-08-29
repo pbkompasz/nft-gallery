@@ -15,6 +15,20 @@ import {
 } from '@kodadot1/minimark/v2'
 import { asSystemRemark } from '@kodadot1/minimark/common'
 import { canSupport } from '@/utils/support'
+import { createMessage } from './utils'
+
+const mintInteraction = async (mint, isV2, api) => {
+  const mintInteraction = isV2.value
+    ? createInteraction({
+        action: NewInteraction.CREATE,
+        payload: { value: mint },
+      })
+    : createMintInteraction(Interaction.MINT, mint)
+
+  return [
+    [asSystemRemark(api, mintInteraction), ...(await canSupport(api, true))],
+  ]
+}
 
 export async function execMintCollectionRmrk(
   item: ActionMintCollection,
@@ -23,7 +37,6 @@ export async function execMintCollectionRmrk(
 ) {
   const { isV2 } = useRmrkVersion()
   const { accountId } = useAuth()
-  const { $i18n } = useNuxtApp()
 
   const metadata = await constructMeta(item)
   const { symbol, name, nftCount } = item.collection as CollectionToMintKusama
@@ -35,33 +48,14 @@ export async function execMintCollectionRmrk(
     metadata,
     nftCount
   )
-  const mintInteraction = isV2.value
-    ? createInteraction({
-        action: NewInteraction.CREATE,
-        payload: { value: mint },
-      })
-    : createMintInteraction(Interaction.MINT, mint)
+  const arg = await mintInteraction(mint, isV2, api)
 
-  const cb = api.tx.utility.batchAll
-  const hasSupport = true
-  const arg = [
-    [
-      asSystemRemark(api, mintInteraction),
-      ...(await canSupport(api, hasSupport)),
-    ],
-  ]
   executeTransaction({
-    cb,
+    cb: api.tx.utility.batchAll,
     arg,
     successMessage:
       item.successMessage ||
-      ((blockNumber) =>
-        $i18n.t('mint.mintCollectionSuccess', {
-          name: item.collection.name,
-          block: blockNumber,
-        })),
-    errorMessage:
-      item.errorMessage ||
-      $i18n.t('mint.errorCreateNewNft', { name: item.collection.name }),
+      ((blockNumber) => createMessage(item.collection.name, blockNumber)),
+    errorMessage: item.errorMessage || createMessage(item.collection.name),
   })
 }

@@ -5,41 +5,20 @@ import type {
 } from '../types'
 import { constructMeta } from './constructMeta'
 import { useStatemineNewCollectionId } from './useNewCollectionId'
-import { createArgsForNftPallet } from './utils'
+import { createArgsForNftPallet, createMessage } from './utils'
 
 export async function execMintCollectionStatemine(
   item: ActionMintCollection,
   api,
   executeTransaction: (p: ExecuteTransactionParams) => void
 ) {
-  const { $i18n } = useNuxtApp()
   const metadata = await constructMeta(item)
   const { nftCount } = item.collection as CollectionToMintStatmine
   const { accountId } = useAuth()
   const transectionSent = ref(false)
 
-  const cb = api.tx.utility.batchAll
-
   const { nextCollectionId, unsubscribe } = useStatemineNewCollectionId()
 
-  const successCb = (blockNumber: string) => {
-    unsubscribe.value && unsubscribe.value()
-    if (item.successMessage) {
-      return resolveSuccessMessage(blockNumber, item.successMessage)
-    }
-    return $i18n.t('mint.mintCollectionSuccess', {
-      name: item.collection.name,
-      block: blockNumber,
-    })
-  }
-
-  const errorCb = () => {
-    unsubscribe.value && unsubscribe.value()
-    return (
-      item.errorMessage ||
-      $i18n.t('mint.errorCreateNewNft', { name: item.collection.name })
-    )
-  }
   const maxSupply = nftCount > 0 ? nftCount : undefined
 
   const createArgs = createArgsForNftPallet(accountId.value, maxSupply)
@@ -56,11 +35,17 @@ export async function execMintCollectionStatemine(
     ]
 
     transectionSent.value = true
+
+    unsubscribe.value && unsubscribe.value()
+
     executeTransaction({
-      cb,
+      cb: api.tx.utility.batchAll,
       arg,
-      successMessage: successCb,
-      errorMessage: errorCb,
+      successMessage: (blockNumber) =>
+        item.successMessage
+          ? resolveSuccessMessage(blockNumber, item.successMessage)
+          : createMessage(item.collection.name, blockNumber),
+      errorMessage: item.errorMessage || createMessage(item.collection.name),
     })
   })
 }

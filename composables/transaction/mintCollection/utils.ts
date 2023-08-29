@@ -19,3 +19,15 @@ export function createArgsForNftPallet(
   }
   return [account, config]
 }
+
+export const createMessage = (itemName, blockNumber?) => {
+  const { $i18n } = useNuxtApp()
+
+  if (blockNumber) {
+    return $i18n.t('mint.mintCollectionSuccess', {
+      name: itemName,
+      block: blockNumber,
+    })
+  }
+  return $i18n.t('mint.errorCreateNewNft', { name: itemName })
+}
